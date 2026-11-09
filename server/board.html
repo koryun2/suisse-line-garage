@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Garage Meier: workshop board</title>
+<style>
+  :root { --bg:#0f1115; --card:#181b22; --line:#2a2f3a; --text:#e8eaf0; --muted:#9aa3b2; --accent:#d6457f; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.45 system-ui, sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:20px 24px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+  h1 { margin:0; font-size:20px; font-weight:600; }
+  header p { margin:2px 0 0; color:var(--muted); font-size:13px; }
+  main { padding:24px; max-width:1200px; margin:0 auto; }
+  table { width:100%; border-collapse:collapse; background:var(--card); border-radius:10px; overflow:hidden; }
+  th, td { padding:10px 12px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+  th { color:var(--muted); font-weight:500; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  input, select, textarea { width:100%; background:#0f1115; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:6px 8px; font:inherit; }
+  textarea { min-height:38px; resize:vertical; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:8px 14px; font:inherit; cursor:pointer; }
+  button.ghost { background:transparent; border:1px solid var(--line); color:var(--muted); }
+  .plate { font-family:ui-monospace, monospace; font-weight:600; }
+  .muted { color:var(--muted); font-size:12px; }
+  form.add { display:grid; grid-template-columns:repeat(6, 1fr) auto; gap:8px; margin-bottom:18px; }
+  .saved { color:#4ec98a; font-size:12px; }
+  @media (max-width: 900px) { form.add { grid-template-columns:1fr 1fr; } table, thead, tbody, tr, td, th { display:block; } thead { display:none; } td { border:0; } tr { border-bottom:1px solid var(--line); padding:8px 0; } }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Garage Meier: workshop board</h1>
+    <p>What you set here is what Anna tells callers who ask "is my car ready?"</p>
+  </div>
+  <span id="status" class="muted"></span>
+</header>
+<main>
+  <form class="add" id="add">
+    <input name="plate" placeholder="Plate, e.g. ZH 123456" required aria-label="Plate">
+    <input name="car" placeholder="Car" aria-label="Car">
+    <input name="customer" placeholder="Customer" aria-label="Customer">
+    <input name="phone" placeholder="Phone" aria-label="Phone">
+    <input name="readyAt" type="datetime-local" aria-label="Expected ready">
+    <input name="note" placeholder="Note for the customer" aria-label="Note">
+    <button type="submit">Add car</button>
+  </form>
+  <table>
+    <thead><tr><th>Plate / car</th><th>Customer</th><th>Status</th><th>Expected ready</th><th>Quote CHF</th><th>Note for the customer</th><th></th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+</main>
+<script>
+const rows = document.getElementById("rows");
+const statusEl = document.getElementById("status");
+let statuses = {};
+
+const toLocal = (iso) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+const fromLocal = (v) => (v ? new Date(v).toISOString() : "");
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+async function api(method, url, body) {
+  const r = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+  if (!r.ok && r.status !== 204) throw new Error(await r.text());
+  return r.status === 204 ? null : r.json();
+}
+
+async function load() {
+  const data = await api("GET", "/api/jobs");
+  statuses = data.statuses;
+  const jobs = data.jobs.sort((a, b) => (a.status === "picked_up") - (b.status === "picked_up") || (b.updatedAt || "").localeCompare(a.updatedAt || ""));
+  rows.innerHTML = jobs.map((j) => `
+    <tr data-id="${j.id}">
+      <td><div class="plate">${esc(j.plate)}</div><input data-k="car" value="${esc(j.car)}" aria-label="Car"></td>
+      <td><input data-k="customer" value="${esc(j.customer)}" aria-label="Customer"><input data-k="phone" value="${esc(j.phone)}" aria-label="Phone"></td>
+      <td><select data-k="status" aria-label="Status">${Object.keys(statuses).map((s) => `<option value="${s}" ${s === j.status ? "selected" : ""}>${s.replace(/_/g, " ")}</option>`).join("")}</select></td>
+      <td><input data-k="readyAt" type="datetime-local" value="${toLocal(j.readyAt)}" aria-label="Expected ready"></td>
+      <td><input data-k="quoteChf" value="${esc(j.quoteChf)}" aria-label="Quote CHF"></td>
+      <td><textarea data-k="note" aria-label="Note">${esc(j.note)}</textarea></td>
+      <td><button class="ghost" data-del>Remove</button><div class="muted">${j.updatedAt ? new Date(j.updatedAt).toLocaleString() : ""}</div></td>
+    </tr>`).join("");
+}
+
+rows.addEventListener("change", async (e) => {
+  const el = e.target.closest("[data-k]");
+  if (!el) return;
+  const id = el.closest("tr").dataset.id;
+  const value = el.dataset.k === "readyAt" ? fromLocal(el.value) : el.value;
+  await api("PATCH", `/api/jobs/${id}`, { [el.dataset.k]: value });
+  statusEl.innerHTML = '<span class="saved">Saved</span>';
+  setTimeout(() => (statusEl.textContent = ""), 1500);
+});
+
+rows.addEventListener("click", async (e) => {
+  if (!e.target.matches("[data-del]")) return;
+  const id = e.target.closest("tr").dataset.id;
+  if (!confirm("Remove this car from the board?")) return;
+  await api("DELETE", `/api/jobs/${id}`);
+  load();
+});
+
+document.getElementById("add").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = Object.fromEntries(new FormData(e.target));
+  f.readyAt = fromLocal(f.readyAt);
+  await api("POST", "/api/jobs", f);
+  e.target.reset();
+  load();
+});
+
+load().catch((err) => (statusEl.textContent = "Could not load jobs: " + err.message));
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "name": "suisse-line-garage",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Garage Meier phone assistant on Suisse Line, plus a repair-status tool and workshop board",
+  "scripts": {
+    "start": "node server/server.js",
+    "test": "node --test server/server.test.js",
+    "tunnel": "npx --yes cloudflared tunnel --url http://localhost:8787"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
