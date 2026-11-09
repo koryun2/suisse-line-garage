@@ -5,31 +5,94 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Garage Meier: workshop board</title>
 <style>
-  :root { --bg:#0f1115; --card:#181b22; --line:#2a2f3a; --text:#e8eaf0; --muted:#9aa3b2; --accent:#d6457f; --ok:#4ec98a; }
-  * { box-sizing: border-box; }
-  body { margin:0; font:15px/1.45 system-ui, sans-serif; background:var(--bg); color:var(--text); }
-  header { padding:20px 28px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; }
-  h1 { margin:0; font-size:20px; font-weight:600; }
-  header p { margin:4px 0 0; color:var(--muted); font-size:13px; max-width:52rem; }
-  main { padding:24px 28px 48px; max-width:1280px; margin:0 auto; }
-  .wrap { overflow-x:auto; border:1px solid var(--line); border-radius:12px; background:var(--card); }
-  table { width:100%; min-width:980px; border-collapse:collapse; }
-  th, td { padding:12px 14px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
-  th { color:var(--muted); font-weight:500; font-size:11px; text-transform:uppercase; letter-spacing:.05em; }
-  tr:last-child td { border-bottom:0; }
+  :root {
+    --bg: #0f1115;
+    --card: #181b22;
+    --line: #2a2f3a;
+    --text: #e8eaf0;
+    --muted: #9aa3b2;
+    --accent: #d6457f;
+    --ok: #4ec98a;
+    --field: #0f1115;
+    --h: 36px;
+    --note: calc(var(--h) * 2 + 8px);
+  }
+  * { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: #2e3340 transparent; }
+  *::-webkit-scrollbar { width: 4px; height: 4px; }
+  *::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+  *::-webkit-scrollbar-track, *::-webkit-scrollbar-corner { background: transparent; }
+  *::-webkit-scrollbar-thumb { background: #2e3340; border-radius: 99px; }
+  *::-webkit-scrollbar-thumb:hover { background: #454b5a; }
+  body { margin: 0; font: 14px/1.4 system-ui, sans-serif; background: var(--bg); color: var(--text); }
+  header { padding: 20px 24px 16px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: 20px; font-weight: 600; }
+  header p { margin: 4px 0 0; color: var(--muted); font-size: 13px; max-width: 52rem; }
+  main { padding: 20px 24px 48px; width: 100%; }
+  .wrap { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  col.c-plate { width: 13%; }
+  col.c-who { width: 15%; }
+  col.c-st { width: 13%; }
+  col.c-reg { width: 11%; }
+  col.c-when { width: 15%; }
+  col.c-quote { width: 7%; }
+  col.c-note { width: 16%; }
+  col.c-act { width: 10%; }
+  th, td { padding: 12px 14px; text-align: left; vertical-align: middle; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-size: 11px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; padding-top: 14px; padding-bottom: 10px; }
+  tr:last-child td { border-bottom: 0; }
   tr.booked td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
-  input, select, textarea { width:100%; background:#0f1115; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:8px 10px; font:inherit; }
-  select { min-width:11.5rem; }
-  textarea { min-height:52px; resize:vertical; }
-  button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:8px 14px; font:inherit; cursor:pointer; white-space:nowrap; }
-  button.ghost { background:transparent; border:1px solid var(--line); color:var(--muted); }
-  .plate { font-family:ui-monospace, Consolas, monospace; font-weight:600; letter-spacing:.02em; margin-bottom:6px; }
-  .muted { color:var(--muted); font-size:12px; }
-  .hint { display:block; color:var(--muted); font-size:11px; margin-bottom:4px; }
-  form.add { display:grid; grid-template-columns:repeat(3, 1fr) auto; gap:8px; margin-bottom:16px; }
-  form.add button { height:40px; margin-top:18px; }
-  .saved { color:var(--ok); font-size:12px; }
-  @media (max-width: 800px) { form.add { grid-template-columns:1fr 1fr; } form.add button { margin-top:0; } }
+  tr.add { background: #14171e; }
+  tr.add td { vertical-align: top; }
+  .plate { font-family: ui-monospace, Consolas, monospace; font-weight: 600; letter-spacing: .02em; }
+  .sub { color: var(--muted); font-size: 13px; margin-top: 3px; }
+  .empty { color: var(--muted); }
+  .label { display: none; }
+  input, select, textarea, button {
+    width: 100%; height: var(--h); background: var(--field); color: var(--text);
+    border: 1px solid var(--line); border-radius: 6px; padding: 0 10px; font: inherit;
+  }
+  textarea { height: var(--note); padding: 8px 10px; resize: none; overflow: auto; }
+  tr[data-id] textarea { height: 52px; }
+  button { background: var(--accent); color: #fff; border: 0; cursor: pointer; white-space: nowrap; font-weight: 500; }
+  button.ghost { background: transparent; border: 1px solid var(--line); color: var(--muted); height: auto; padding: 7px 10px; }
+  tr.add textarea,
+  tr.add .add-btn {
+    display: block;
+    height: var(--note);
+    min-height: var(--note);
+    max-height: var(--note);
+    margin: 0;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+  tr.add .add-btn {
+    border: 1px solid transparent;
+    padding: 0;
+    line-height: calc(var(--note) - 2px);
+  }
+  .muted { color: var(--muted); font-size: 11px; }
+  .saved { color: var(--ok); font-size: 12px; }
+  @media (max-width: 900px) {
+    header, main { padding-left: 16px; padding-right: 16px; }
+    .wrap { background: transparent; border: 0; overflow: visible; }
+    table, thead, tbody, tr, th, td, colgroup, col { display: block; width: 100%; min-width: 0; }
+    colgroup, thead { display: none; }
+    tr { background: var(--card); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 12px; padding: 14px; }
+    tr.booked { box-shadow: inset 3px 0 0 var(--accent); }
+    tr.booked td:first-child { box-shadow: none; }
+    td { display: grid; grid-template-columns: 8.5rem 1fr; gap: 8px 12px; align-items: center; border: 0; padding: 8px 0; }
+    td:last-child { border-bottom: 0; }
+    .label { display: block; color: var(--muted); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }
+    tr.add td:last-child, tr[data-id] td:last-child { grid-template-columns: 1fr; }
+    .add-btn, button.ghost { width: 100%; }
+    .add-btn { height: var(--note); }
+    button.ghost { height: var(--h); }
+  }
+  @media (max-width: 520px) {
+    td { grid-template-columns: 1fr; gap: 4px; }
+    h1 { font-size: 18px; }
+  }
 </style>
 </head>
 <body>
@@ -42,25 +105,71 @@
   <span id="status" class="muted"></span>
 </header>
 <main>
-  <form class="add" id="add">
-    <label><span class="hint">Plate</span><input name="plate" placeholder="ZH 123456" required></label>
-    <label><span class="hint">Car</span><input name="car" placeholder="VW Golf"></label>
-    <label><span class="hint">Customer name</span><input name="customer" placeholder="Full name"></label>
-    <label><span class="hint">Phone</span><input name="phone" placeholder="+41 79 …"></label>
-    <label><span class="hint">Expected ready</span><input name="readyAt" type="datetime-local"></label>
-    <label><span class="hint">Note</span><input name="note" placeholder="For the customer"></label>
-    <button type="submit">Add car</button>
-  </form>
+  <form id="add"></form>
   <div class="wrap">
-  <table>
-    <thead><tr><th>Plate / car</th><th>Customer</th><th>Status</th><th>Expected ready</th><th>Quote CHF</th><th>Note for the customer</th><th></th></tr></thead>
-    <tbody id="rows"></tbody>
-  </table>
+    <table>
+      <colgroup>
+        <col class="c-plate"><col class="c-who"><col class="c-st"><col class="c-reg"><col class="c-when"><col class="c-quote"><col class="c-note"><col class="c-act">
+      </colgroup>
+      <thead>
+        <tr>
+          <th>Plate / car</th>
+          <th>Customer</th>
+          <th>Status</th>
+          <th>Registered</th>
+          <th>Expected ready</th>
+          <th>Quote CHF</th>
+          <th>Note for the customer</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="add">
+          <td>
+            <span class="label">Plate / car</span>
+            <div>
+              <input name="plate" placeholder="ZH 123456" required aria-label="Plate" form="add" style="margin-bottom:8px">
+              <input name="car" placeholder="VW Golf" aria-label="Car" form="add">
+            </div>
+          </td>
+          <td>
+            <span class="label">Customer</span>
+            <div>
+              <input name="customer" placeholder="Name" aria-label="Customer" form="add" style="margin-bottom:8px">
+              <input name="phone" placeholder="+41 79 …" aria-label="Phone" form="add">
+            </div>
+          </td>
+          <td>
+            <span class="label">Status</span>
+            <select name="status" aria-label="Status" form="add"></select>
+          </td>
+          <td>
+            <span class="label">Registered</span>
+            <div class="empty">Now</div>
+          </td>
+          <td>
+            <span class="label">Expected ready</span>
+            <input name="readyAt" type="datetime-local" aria-label="Expected ready" form="add">
+          </td>
+          <td>
+            <span class="label">Quote CHF</span>
+            <input name="quoteChf" placeholder="—" aria-label="Quote CHF" form="add">
+          </td>
+          <td>
+            <span class="label">Note</span>
+            <textarea name="note" placeholder="Note for the customer" aria-label="Note" form="add"></textarea>
+          </td>
+          <td><button type="submit" class="add-btn" form="add">Add car</button></td>
+        </tr>
+      </tbody>
+      <tbody id="rows"></tbody>
+    </table>
   </div>
 </main>
 <script>
 const rows = document.getElementById("rows");
 const statusEl = document.getElementById("status");
+const addStatus = document.querySelector("tr.add select[name=status]");
 let statuses = {};
 
 const toLocal = (iso) => {
@@ -73,6 +182,14 @@ const toLocal = (iso) => {
 const fromLocal = (v) => (v ? new Date(v).toISOString() : "");
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const prettyPlate = (s) => String(s || "").replace(/^([A-Z]{2})\s*(\d+)$/i, (_, a, b) => `${a.toUpperCase()} ${b}`);
+const dash = (s) => (s && String(s).trim() ? esc(s) : `<span class="empty">—</span>`);
+const fmtReg = (iso) => {
+  if (!iso) return `<span class="empty">—</span>`;
+  const d = new Date(iso);
+  if (isNaN(d)) return `<span class="empty">—</span>`;
+  return esc(d.toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false }));
+};
+const options = (selected) => Object.keys(statuses).map((s) => `<option value="${s}" ${s === selected ? "selected" : ""}>${s.replace(/_/g, " ")}</option>`).join("");
 
 async function api(method, url, body) {
   const r = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
@@ -80,43 +197,47 @@ async function api(method, url, body) {
   return r.status === 204 ? null : r.json();
 }
 
-const smsLine = (j) => {
-  const n = (j.notifications || []).at(-1);
-  if (!n) return "";
-  const label = { sent: "SMS sent", "dry-run": "SMS (test mode)", failed: "SMS failed", skipped: "No SMS" }[n.status] || n.status;
-  const time = new Date(n.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  const error = n.status === "failed" && n.error ? ` (${esc(n.error)})` : "";
-  return `<div class="muted">${label}${error} · ${time}</div>`;
-};
-
 async function load() {
   const data = await api("GET", "/api/jobs");
   statuses = data.statuses;
+  addStatus.innerHTML = options("received");
   document.getElementById("smsmode").textContent = data.smsLive
     ? "SMS: live. Customers get a text when a car is ready or needs approval."
     : "SMS: test mode. Texts are saved to data/sms-outbox, not sent.";
   const jobs = data.jobs.sort((a, b) => (a.status === "picked_up") - (b.status === "picked_up") || (b.updatedAt || "").localeCompare(a.updatedAt || ""));
   rows.innerHTML = jobs.map((j) => `
-    <tr data-id="${j.id}" class="${j.status === "booked" ? "booked" : ""}">
-      <td><div class="plate">${esc(prettyPlate(j.plate))}</div><input data-k="car" value="${esc(j.car)}" aria-label="Car"></td>
+    <tr class="${j.status === "booked" ? "booked" : ""}" data-id="${j.id}">
+      <td><span class="label">Plate / car</span><div><div class="plate">${esc(prettyPlate(j.plate))}</div><div class="sub">${dash(j.car)}</div></div></td>
+      <td><span class="label">Customer</span><div><div>${dash(j.customer)}</div><div class="sub">${dash(j.phone)}</div></div></td>
       <td>
-        <span class="hint">Name</span>
-        <input data-k="customer" value="${esc(j.customer)}" placeholder="Name" aria-label="Customer">
-        <span class="hint" style="margin-top:8px">Phone</span>
-        <input data-k="phone" value="${esc(j.phone)}" placeholder="Phone" aria-label="Phone">
+        <span class="label">Status</span>
+        <div>
+          <select data-k="status" aria-label="Status">${options(j.status)}</select>
+        </div>
       </td>
-      <td><select data-k="status" aria-label="Status">${Object.keys(statuses).map((s) => `<option value="${s}" ${s === j.status ? "selected" : ""}>${s.replace(/_/g, " ")}</option>`).join("")}</select>${smsLine(j)}</td>
-      <td><input data-k="readyAt" type="datetime-local" value="${toLocal(j.readyAt)}" aria-label="Expected ready"></td>
-      <td><input data-k="quoteChf" value="${esc(j.quoteChf)}" aria-label="Quote CHF"></td>
-      <td><textarea data-k="note" aria-label="Note">${esc(j.note)}</textarea></td>
-      <td><button class="ghost" data-del>Remove</button><div class="muted">${j.updatedAt ? new Date(j.updatedAt).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : ""}</div></td>
+      <td><span class="label">Registered</span><div>${fmtReg(j.createdAt || j.updatedAt)}</div></td>
+      <td>
+        <span class="label">Expected ready</span>
+        <input data-k="readyAt" type="datetime-local" value="${toLocal(j.readyAt)}" aria-label="Expected ready">
+      </td>
+      <td>
+        <span class="label">Quote CHF</span>
+        <input data-k="quoteChf" value="${esc(j.quoteChf)}" placeholder="—" aria-label="Quote CHF">
+      </td>
+      <td>
+        <span class="label">Note</span>
+        <textarea data-k="note" aria-label="Note">${esc(j.note)}</textarea>
+      </td>
+      <td>
+        <button class="ghost" type="button" data-del>Remove</button>
+      </td>
     </tr>`).join("");
 }
 
 rows.addEventListener("change", async (e) => {
   const el = e.target.closest("[data-k]");
   if (!el) return;
-  const id = el.closest("tr").dataset.id;
+  const id = el.closest("[data-id]").dataset.id;
   const value = el.dataset.k === "readyAt" ? fromLocal(el.value) : el.value;
   await api("PATCH", `/api/jobs/${id}`, { [el.dataset.k]: value });
   if (el.dataset.k === "status") await load();
@@ -126,7 +247,7 @@ rows.addEventListener("change", async (e) => {
 
 rows.addEventListener("click", async (e) => {
   if (!e.target.matches("[data-del]")) return;
-  const id = e.target.closest("tr").dataset.id;
+  const id = e.target.closest("[data-id]").dataset.id;
   if (!confirm("Remove this car from the board?")) return;
   await api("DELETE", `/api/jobs/${id}`);
   load();

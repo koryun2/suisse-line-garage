@@ -147,6 +147,7 @@ async function addBookingToBoard(args, phone, body = {}, smsResult = null) {
       quoteChf: "",
       note,
       notifications: ping,
+      createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
     jobs.unshift(job);
@@ -219,7 +220,11 @@ async function loadJobs() {
     await writeFile(JOBS_FILE, JSON.stringify(seed, null, 2));
     return seed;
   }
-  return JSON.parse(await readFile(JOBS_FILE, "utf8"));
+  const jobs = JSON.parse(await readFile(JOBS_FILE, "utf8"));
+  for (const job of jobs) {
+    if (!job.createdAt) job.createdAt = job.updatedAt || "";
+  }
+  return jobs;
 }
 
 async function saveJobs(jobs) {
@@ -346,6 +351,7 @@ export function createServer() {
           readyAt: input.readyAt || "",
           quoteChf: input.quoteChf || "",
           note: input.note || "",
+          createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
         jobs.push(job);

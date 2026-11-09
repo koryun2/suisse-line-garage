@@ -9,6 +9,7 @@
     "readyAt": "2026-11-11T16:00:00+01:00",
     "quoteChf": "",
     "note": "Brake pads front and rear are being replaced.",
+    "createdAt": "2026-11-09T09:15:00+01:00",
     "updatedAt": "2026-11-09T09:15:00+01:00"
   },
   {
@@ -21,6 +22,7 @@
     "readyAt": "2026-11-12T12:00:00+01:00",
     "quoteChf": "860",
     "note": "Timing belt and water pump recommended at this mileage.",
+    "createdAt": "2026-11-09T11:40:00+01:00",
     "updatedAt": "2026-11-09T11:40:00+01:00"
   },
   {
@@ -33,6 +35,7 @@
     "readyAt": "2026-11-09T15:00:00+01:00",
     "quoteChf": "",
     "note": "Service done, winter tyres fitted.",
+    "createdAt": "2026-11-09T14:55:00+01:00",
     "updatedAt": "2026-11-09T14:55:00+01:00"
   },
   {
@@ -45,6 +48,7 @@
     "readyAt": "2026-11-13T17:00:00+01:00",
     "quoteChf": "",
     "note": "Turbo hose ordered, arrives Thursday morning.",
+    "createdAt": "2026-11-09T10:05:00+01:00",
     "updatedAt": "2026-11-09T10:05:00+01:00"
   }
 ]
