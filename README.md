@@ -4,6 +4,8 @@ Anna answers the phone for Garage Meier, a fictional car repair workshop in Zuri
 
 **Extra feature: "Is my car ready?"** Status calls are among the most common calls a workshop gets, and they interrupt mechanics. Mechanics update each car on a simple workshop board (status, expected ready time, quote, note). When a customer calls, Anna asks for the licence plate, calls the `repair_status` tool, and reads back the live status. If the caller doesn't know the plate, the tool matches their phone number. If a quote is waiting, Anna gives the amount and takes the customer's answer as a message; she never approves work herself.
 
+**SMS updates.** When a mechanic sets a car to "ready" or "waiting for approval" on the board, the customer gets an SMS automatically (once per status change). After Anna books an appointment, she calls `booking_sms` and the customer gets a confirmation text. SMS goes through Twilio; without Twilio credentials the service runs in test mode and saves each text to `server/data/sms-outbox/` instead of sending it.
+
 ## Architecture
 
 ```mermaid
@@ -11,7 +13,9 @@ flowchart LR
   Caller["Customer phone"] --> SL["Suisse Line: number, speech, LLM (Anna)"]
   SL -->|"free slots / book"| Cal["Outlook calendar"]
   SL -->|"repair_status tool (webhook)"| Svc["Status service (this repo)"]
+  SL -->|"booking_sms tool"| Svc
   Board["Workshop board (mechanics)"] --> Svc
+  Svc -->|"ready / quote / booking"| SMS["Twilio SMS to customer"]
   SL -->|"breakdown"| Fwd["Workshop mobile"]
   SL -->|"after call"| Mail["Email summary"]
 ```
@@ -29,10 +33,10 @@ flowchart LR
 ```powershell
 node --env-file=.env server/server.js   # board on http://localhost:8787 (any username, password BOARD_PASSWORD)
 npm run tunnel                          # temporary public URL for Suisse Line
-npm test                                # 9 tests
+npm test                                # 15 tests
 ```
 
-`.env` holds `TOOL_TOKEN` and `BOARD_PASSWORD` (not committed). Every webhook call from Suisse Line is saved to `server/data/webhook-log/` so you can see the exact payload.
+`.env` holds `TOOL_TOKEN` and `BOARD_PASSWORD` (not committed). To send real SMS, add `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and `TWILIO_FROM` (your Twilio number) to `.env` and restart. A Twilio trial account only texts numbers you have verified in Twilio, which is enough for a demo to your own phone. Every webhook call from Suisse Line is saved to `server/data/webhook-log/` so you can see the exact payload.
 
 The tunnel URL changes on every start, so the tool's Webhook URL must be updated each time. For a stable demo, deploy `server/` to Render or Fly.io with a persistent disk.
 
@@ -50,6 +54,14 @@ The tunnel URL changes on every start, so the tool's Webhook URL must be updated
 - Webhook URL: `<tunnel URL>/tools/repair-status?token=<TOOL_TOKEN>`
 - Parameter: `license_plate` (string, optional), "Swiss licence plate as said by the caller, e.g. ZH 123456"
 - Execution behaviour: leave all three toggles off.
+
+**Tools > Add tool (second tool)**
+- Tool Name: `booking_sms`
+- HTTP Method: `POST`
+- When to Use: `Use right after an appointment has been booked in the calendar, to send the caller an SMS confirmation. Pass the caller's mobile number, the service, the booked date and time in words, the car and the licence plate.`
+- Webhook URL: `<tunnel URL>/tools/booking-sms?token=<TOOL_TOKEN>`
+- Parameters (all strings): `customer_phone` (caller's mobile number), `service` (booked job, e.g. Small service), `date_time` (e.g. Wednesday 11 November at 14:30), `car` (make and model), `license_plate`
+- Execution behaviour: turn on "Don't wait for result".
 
 **Opening Hours**: Mon to Fri 07:30 to 12:00 and 13:15 to 18:00; Sat 08:00 to 12:00; Sun closed.
 
@@ -81,5 +93,8 @@ Use Chat test first (it costs no minutes), then Test call, then one call from a 
 | 10 | "How much is a tyre change?" | CHF 80 (wheels on rims) or CHF 140; no invented prices |
 | 11 | Speaks German halfway through | Switches to German and stays |
 | 12 | Stop the status service, ask for status | Says she can't check right now, takes a message |
+| 13 | Book an appointment (needs the calendar) | After booking, `booking_sms` fires; text in `sms-outbox` or on your phone |
+| 14 | Set a car with a phone number to "ready" on the board | One SMS; editing the note afterwards sends no second SMS |
+| 15 | Set AG 45789 to "waiting approval" again | SMS with the CHF 860 quote |
 
 After each call, check Call Logs (transcript), the Outlook calendar, the summary email and `server/data/webhook-log/`.

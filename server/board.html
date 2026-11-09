@@ -31,6 +31,7 @@
   <div>
     <h1>Garage Meier: workshop board</h1>
     <p>What you set here is what Anna tells callers who ask "is my car ready?"</p>
+    <p id="smsmode"></p>
   </div>
   <span id="status" class="muted"></span>
 </header>
@@ -70,15 +71,27 @@ async function api(method, url, body) {
   return r.status === 204 ? null : r.json();
 }
 
+const smsLine = (j) => {
+  const n = (j.notifications || []).at(-1);
+  if (!n) return "";
+  const label = { sent: "SMS sent", "dry-run": "SMS (test mode)", failed: "SMS failed", skipped: "No SMS" }[n.status] || n.status;
+  const time = new Date(n.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const error = n.status === "failed" && n.error ? ` (${esc(n.error)})` : "";
+  return `<div class="muted">${label}${error} · ${time}</div>`;
+};
+
 async function load() {
   const data = await api("GET", "/api/jobs");
   statuses = data.statuses;
+  document.getElementById("smsmode").textContent = data.smsLive
+    ? "SMS: live. Customers get a text when a car is ready or needs approval."
+    : "SMS: test mode. Texts are saved to data/sms-outbox, not sent.";
   const jobs = data.jobs.sort((a, b) => (a.status === "picked_up") - (b.status === "picked_up") || (b.updatedAt || "").localeCompare(a.updatedAt || ""));
   rows.innerHTML = jobs.map((j) => `
     <tr data-id="${j.id}">
       <td><div class="plate">${esc(j.plate)}</div><input data-k="car" value="${esc(j.car)}" aria-label="Car"></td>
       <td><input data-k="customer" value="${esc(j.customer)}" aria-label="Customer"><input data-k="phone" value="${esc(j.phone)}" aria-label="Phone"></td>
-      <td><select data-k="status" aria-label="Status">${Object.keys(statuses).map((s) => `<option value="${s}" ${s === j.status ? "selected" : ""}>${s.replace(/_/g, " ")}</option>`).join("")}</select></td>
+      <td><select data-k="status" aria-label="Status">${Object.keys(statuses).map((s) => `<option value="${s}" ${s === j.status ? "selected" : ""}>${s.replace(/_/g, " ")}</option>`).join("")}</select>${smsLine(j)}</td>
       <td><input data-k="readyAt" type="datetime-local" value="${toLocal(j.readyAt)}" aria-label="Expected ready"></td>
       <td><input data-k="quoteChf" value="${esc(j.quoteChf)}" aria-label="Quote CHF"></td>
       <td><textarea data-k="note" aria-label="Note">${esc(j.note)}</textarea></td>
@@ -92,6 +105,7 @@ rows.addEventListener("change", async (e) => {
   const id = el.closest("tr").dataset.id;
   const value = el.dataset.k === "readyAt" ? fromLocal(el.value) : el.value;
   await api("PATCH", `/api/jobs/${id}`, { [el.dataset.k]: value });
+  if (el.dataset.k === "status") await load();
   statusEl.innerHTML = '<span class="saved">Saved</span>';
   setTimeout(() => (statusEl.textContent = ""), 1500);
 });

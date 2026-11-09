@@ -4,9 +4,10 @@ import { existsSync } from "node:fs";
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { sendSms, smsConfigured } from "./sms.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = process.env.DATA_DIR || path.join(here, "data");
+const DATA_DIR = (process.env.DATA_DIR ||= path.join(here, "data"));
 const JOBS_FILE = path.join(DATA_DIR, "jobs.json");
 const LOG_DIR = path.join(DATA_DIR, "webhook-log");
 const PORT = Number(process.env.PORT || 8787);
@@ -50,12 +51,44 @@ function findKeyDeep(obj, keys, depth = 0) {
 }
 
 const PLATE_KEYS = ["license_plate", "licence_plate", "plate", "kennzeichen", "registration"];
-const PHONE_KEYS = ["caller_phone", "from_number", "caller_number", "from", "caller", "phone_number", "customer_phone"];
+const PHONE_KEYS = ["caller_phone", "from_number", "caller_number", "from", "caller", "phone_number", "phonenumber", "customer_phone"];
+
+function toolArgs(body) {
+  return body?.tool?.arguments && typeof body.tool.arguments === "object" ? body.tool.arguments : {};
+}
 
 export function extractLookup(body, query = {}) {
-  const plate = query.license_plate || findKeyDeep(body, PLATE_KEYS);
-  const phone = query.caller_phone || findKeyDeep(body, PHONE_KEYS);
+  const args = toolArgs(body);
+  const plate = query.license_plate || findKeyDeep(args, PLATE_KEYS) || findKeyDeep(body, PLATE_KEYS);
+  const phone = query.caller_phone || findKeyDeep(args, PHONE_KEYS) || findKeyDeep(body, PHONE_KEYS);
   return { plate: normalizePlate(plate), phone: normalizePhone(phone) };
+}
+
+const SHOP = "Garage Meier";
+const HOURS = "Mon-Fri 07:30-12:00 & 13:15-18:00, Sat 08:00-12:00";
+
+export function smsForStatus(job) {
+  const car = job.car ? `${job.car} (${job.plate})` : job.plate;
+  if (job.status === "ready") {
+    return `${SHOP}: Your ${car} is ready for pickup. Open ${HOURS}.`;
+  }
+  if (job.status === "waiting_approval") {
+    const quote = job.quoteChf ? `CHF ${job.quoteChf}` : "ready";
+    return `${SHOP}: Quote for your ${car}: ${quote}. Please call us to approve it.`;
+  }
+  return null;
+}
+
+export function bookingSms({ service, when, car, plate }) {
+  const what = [service || "Appointment", car, plate].filter(Boolean).join(", ");
+  return `${SHOP}: Booked - ${what} on ${when}. To change it, just call us. See you soon!`;
+}
+
+async function notifyCustomer(job) {
+  const text = smsForStatus(job);
+  if (!text || !job.phone) return;
+  const result = await sendSms(normalizePhone(job.phone), text);
+  job.notifications = [...(job.notifications || []), { at: new Date().toISOString(), status: job.status, ...result }];
 }
 
 function formatWhen(iso) {
@@ -81,9 +114,10 @@ export function answerFor(jobs, { plate, phone }) {
   if (!matches.length) {
     return {
       found: false,
+      tool_working: true,
       message: plate
-        ? `No car with plate ${plate} is in the workshop. Ask the caller to repeat the plate, or offer a callback from the workshop.`
-        : "No car is linked to this caller's number. Ask the caller for the licence plate.",
+        ? `The lookup worked, but no car with plate ${plate} is in the workshop. Ask the caller to spell the plate once more and call repair_status again with it. If it is still not found, offer a callback.`
+        : "The lookup worked, but no licence plate was given and the caller's number is not linked to a car. Ask the caller for the licence plate, then call repair_status again with license_plate set.",
     };
   }
 
@@ -166,7 +200,7 @@ export function createServer() {
 
       if (url.pathname === "/health") return send(res, 200, { ok: true });
 
-      if (url.pathname === "/tools/repair-status") {
+      if (url.pathname.startsWith("/tools/")) {
         if (!safeEqual(query.token || req.headers["x-tool-token"] || "", TOOL_TOKEN)) {
           return send(res, 401, { error: "unauthorized" });
         }
@@ -177,9 +211,34 @@ export function createServer() {
         } catch {
           body = { raw };
         }
-        await logPayload({ method: req.method, query: { ...query, token: undefined }, body });
-        const result = answerFor(await loadJobs(), extractLookup(body, query));
-        return send(res, 200, result);
+        await logPayload({ method: req.method, path: url.pathname, query: { ...query, token: undefined }, body });
+
+        if (url.pathname === "/tools/repair-status") {
+          return send(res, 200, answerFor(await loadJobs(), extractLookup(body, query)));
+        }
+
+        if (url.pathname === "/tools/booking-sms") {
+          const args = { ...toolArgs(body), ...query };
+          const to = normalizePhone(args.customer_phone || findKeyDeep(body, PHONE_KEYS));
+          if (!to) {
+            return send(res, 200, { sent: false, message: "No phone number. Ask the caller for a mobile number for the SMS." });
+          }
+          const when = args.date_time || args.when;
+          if (!when) {
+            return send(res, 200, { sent: false, message: "Missing date_time. Call booking_sms again with the booked date and time." });
+          }
+          const text = bookingSms({ service: args.service, when, car: args.car, plate: args.license_plate });
+          const result = await sendSms(to, text);
+          const ok = result.status === "sent" || result.status === "dry-run";
+          return send(res, 200, {
+            sent: ok,
+            message: ok
+              ? "Confirmation SMS sent. Tell the caller they will get an SMS with the appointment."
+              : "The SMS could not be sent. Do not mention an SMS; the booking itself is still valid.",
+          });
+        }
+
+        return send(res, 404, { error: "unknown tool" });
       }
 
       if (url.pathname === "/" || url.pathname.startsWith("/api/jobs")) {
@@ -194,7 +253,7 @@ export function createServer() {
       }
 
       if (url.pathname === "/api/jobs" && req.method === "GET") {
-        return send(res, 200, { jobs: await loadJobs(), statuses: STATUSES });
+        return send(res, 200, { jobs: await loadJobs(), statuses: STATUSES, smsLive: smsConfigured() });
       }
 
       if (url.pathname === "/api/jobs" && req.method === "POST") {
@@ -228,7 +287,9 @@ export function createServer() {
           if (k in input) job[k] = input[k];
         }
         if ("plate" in input && normalizePlate(input.plate)) job.plate = String(input.plate).toUpperCase().trim();
+        const statusChanged = STATUSES[input.status] && input.status !== job.status;
         if (STATUSES[input.status]) job.status = input.status;
+        if (statusChanged) await notifyCustomer(job);
         job.updatedAt = new Date().toISOString();
         await saveJobs(jobs);
         return send(res, 200, job);
@@ -250,6 +311,7 @@ export function createServer() {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   createServer().listen(PORT, () => {
     console.log(`Workshop board: http://localhost:${PORT}/  (password: BOARD_PASSWORD)`);
-    console.log(`Tool webhook:   http://localhost:${PORT}/tools/repair-status?token=<TOOL_TOKEN>`);
+    console.log(`Tool webhooks:  /tools/repair-status and /tools/booking-sms  (?token=<TOOL_TOKEN>)`);
+    console.log(`SMS:            ${smsConfigured() ? "live via Twilio" : "dry-run, written to data/sms-outbox"}`);
   });
 }
