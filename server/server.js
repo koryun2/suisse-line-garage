@@ -16,6 +16,7 @@ const BOARD_PASSWORD = process.env.BOARD_PASSWORD || "garage";
 const LOG_PAYLOADS = process.env.LOG_PAYLOADS !== "0";
 
 export const STATUSES = {
+  booked: "An appointment is booked. The car is not in the workshop yet.",
   received: "The car has arrived and is waiting for a mechanic.",
   diagnosing: "A mechanic is checking the car to find the problem.",
   waiting_approval: "We have a quote ready and need the customer's OK before we continue.",
@@ -52,6 +53,7 @@ function findKeyDeep(obj, keys, depth = 0) {
 
 const PLATE_KEYS = ["license_plate", "licence_plate", "plate", "kennzeichen", "registration"];
 const PHONE_KEYS = ["caller_phone", "from_number", "caller_number", "from", "caller", "phone_number", "phonenumber", "customer_phone"];
+const NAME_KEYS = ["customer_name", "customer", "name", "last_name", "full_name"];
 
 function toolArgs(body) {
   return body?.tool?.arguments && typeof body.tool.arguments === "object" ? body.tool.arguments : {};
@@ -82,6 +84,46 @@ export function smsForStatus(job) {
 export function bookingSms({ service, when, car, plate }) {
   const what = [service || "Appointment", car, plate].filter(Boolean).join(", ");
   return `${SHOP}: Booked - ${what} on ${when}. To change it, just call us. See you soon!`;
+}
+
+async function addBookingToBoard(args, phone) {
+  const plateRaw = String(args.license_plate || args.plate || args.licence_plate || "").trim();
+  if (!normalizePlate(plateRaw)) return null;
+  const jobs = await loadJobs();
+  const plateKey = normalizePlate(plateRaw);
+  let job = jobs.find((j) => normalizePlate(j.plate) === plateKey);
+  const when = args.date_time || args.when || "";
+  const note = [args.service, when].filter(Boolean).join(" — ");
+  const customer = findKeyDeep(args, NAME_KEYS) || "";
+  const inShop = job && job.status && job.status !== "booked" && job.status !== "picked_up";
+  if (job) {
+    if (args.car) job.car = args.car;
+    if (customer) job.customer = customer;
+    if (phone) job.phone = phone;
+    if (!inShop) {
+      job.status = "booked";
+      job.note = note || job.note;
+    } else if (note) {
+      job.note = job.note ? `${job.note} | Also booked: ${note}` : `Also booked: ${note}`;
+    }
+    job.updatedAt = new Date().toISOString();
+  } else {
+    job = {
+      id: randomUUID(),
+      plate: plateRaw.toUpperCase(),
+      car: args.car || "",
+      customer,
+      phone: phone || "",
+      status: "booked",
+      readyAt: "",
+      quoteChf: "",
+      note,
+      updatedAt: new Date().toISOString(),
+    };
+    jobs.unshift(job);
+  }
+  await saveJobs(jobs);
+  return job;
 }
 
 async function notifyCustomer(job) {
@@ -127,6 +169,7 @@ export function answerFor(jobs, { plate, phone }) {
   if (eta && job.status !== "ready" && job.status !== "picked_up") parts.push(`Expected ready: ${eta}.`);
   if (job.status === "waiting_approval" && job.quoteChf) parts.push(`Quote: CHF ${job.quoteChf}.`);
   if (job.note) parts.push(`Note for the customer: ${job.note}`);
+  if (job.status === "booked") parts.push("The car has not been dropped off yet.");
   if (job.status === "ready") parts.push("Pickup during opening hours; payment by card or TWINT at the desk.");
 
   return {
@@ -230,10 +273,14 @@ export function createServer() {
           const text = bookingSms({ service: args.service, when, car: args.car, plate: args.license_plate });
           const result = await sendSms(to, text);
           const ok = result.status === "sent" || result.status === "dry-run";
+          const onBoard = await addBookingToBoard(args, to);
           return send(res, 200, {
             sent: ok,
+            on_board: Boolean(onBoard),
             message: ok
-              ? "Confirmation SMS sent. Tell the caller they will get an SMS with the appointment."
+              ? onBoard
+                ? "Confirmation SMS sent and the booking is on the workshop board. Tell the caller they will get an SMS with the appointment."
+                : "Confirmation SMS sent. Tell the caller they will get an SMS with the appointment."
               : "The SMS could not be sent. Do not mention an SMS; the booking itself is still valid.",
           });
         }

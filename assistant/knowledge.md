@@ -45,6 +45,7 @@ Card, TWINT or invoice (30 days) for regular customers. Payment when the car is 
 12 months on parts and labour. Manufacturer warranty stays valid with our service.
 
 ## Status words (repair_status tool)
+- booked: an appointment is booked; the car is not in the workshop yet
 - received: the car has arrived
 - diagnosing: a mechanic is checking the car
 - waiting approval: a quote is ready; the customer must say yes before work continues

@@ -105,6 +105,37 @@ test("booking SMS goes to the given number (test mode writes the outbox)", async
   assert.match(last.text, /Small service, VW Golf on Wednesday 11 November at 14:30/);
 });
 
+test("booking SMS adds the appointment to the workshop board", async () => {
+  const r = await (
+    await fetch(`${base}/tools/booking-sms?token=t0k`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tool: {
+          arguments: {
+            customer_phone: "079 555 66 77",
+            customer_name: "Nina Frei",
+            service: "Tyre change",
+            date_time: "Saturday 14 November at 09:00",
+            car: "Seat Leon",
+            license_plate: "ZH 555111",
+          },
+        },
+      }),
+    })
+  ).json();
+  assert.equal(r.sent, true);
+  assert.equal(r.on_board, true);
+  const { jobs } = await (await fetch(`${base}/api/jobs`, { headers: auth })).json();
+  const booked = jobs.find((j) => j.plate === "ZH 555111");
+  assert.equal(booked.status, "booked");
+  assert.equal(booked.customer, "Nina Frei");
+  assert.match(booked.note, /Tyre change/);
+  const spoken = await (await tool({ license_plate: "ZH 555111" })).json();
+  assert.equal(spoken.status, "booked");
+  assert.match(spoken.message, /not in the workshop yet/i);
+});
+
 test("booking SMS without a phone number asks Anna for one", async () => {
   const r = await (
     await fetch(`${base}/tools/booking-sms?token=t0k`, {
