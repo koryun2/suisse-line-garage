@@ -11,7 +11,7 @@ process.env.LOG_PAYLOADS = "0";
 
 delete process.env.TWILIO_ACCOUNT_SID;
 
-const { createServer, normalizePlate, normalizePhone, extractLookup, smsForStatus } = await import("./server.js");
+const { createServer, normalizePlate, normalizePhone, extractLookup, extractCustomerName, smsForStatus } = await import("./server.js");
 
 const server = createServer().listen(0);
 const base = `http://localhost:${server.address().port}`;
@@ -134,6 +134,39 @@ test("booking SMS adds the appointment to the workshop board", async () => {
   const spoken = await (await tool({ license_plate: "ZH 555111" })).json();
   assert.equal(spoken.status, "booked");
   assert.match(spoken.message, /not in the workshop yet/i);
+});
+
+test("booking SMS fills the customer name from first and last name", async () => {
+  await fetch(`${base}/tools/booking-sms?token=t0k`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      last_name: "Keller",
+      first_name: "Marco",
+      tool: {
+        arguments: {
+          customer_phone: "076 444 55 66",
+          service: "Diagnosis",
+          date_time: "Monday 16 November at 08:00",
+          car: "Audi A3",
+          license_plate: "ZH 222333",
+        },
+      },
+    }),
+  });
+  const { jobs } = await (await fetch(`${base}/api/jobs`, { headers: auth })).json();
+  const booked = jobs.find((j) => j.plate === "ZH 222333");
+  assert.equal(booked.customer, "Marco Keller");
+  assert.equal(extractCustomerName({ last_name: "Meier" }, {}), "Meier");
+  assert.equal(
+    extractCustomerName({ event_title: "Tyre change - Jane Doe - Ford Escape - ZH 12345" }, {}),
+    "Jane Doe",
+  );
+  assert.equal(
+    extractCustomerName({ title: "Tyre change - Jane Doe - Ford Escape - ZH 12345", tool: { name: "booking_sms" } }, {}),
+    "Jane Doe",
+  );
+  assert.equal(extractCustomerName({ name: "Anna Rossi" }, {}), "Anna Rossi");
 });
 
 test("booking SMS without a phone number asks Anna for one", async () => {

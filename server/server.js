@@ -53,7 +53,10 @@ function findKeyDeep(obj, keys, depth = 0) {
 
 const PLATE_KEYS = ["license_plate", "licence_plate", "plate", "kennzeichen", "registration"];
 const PHONE_KEYS = ["caller_phone", "from_number", "caller_number", "from", "caller", "phone_number", "phonenumber", "customer_phone"];
-const NAME_KEYS = ["customer_name", "customer", "name", "last_name", "full_name"];
+const NAME_KEYS = ["customer_name", "customer", "full_name", "caller_name", "name"];
+const FIRST_KEYS = ["first_name", "firstname", "given_name"];
+const LAST_KEYS = ["last_name", "lastname", "family_name", "surname"];
+const TITLE_KEYS = ["event_title", "calendar_title", "appointment_title", "summary", "title"];
 
 function toolArgs(body) {
   return body?.tool?.arguments && typeof body.tool.arguments === "object" ? body.tool.arguments : {};
@@ -64,6 +67,27 @@ export function extractLookup(body, query = {}) {
   const plate = query.license_plate || findKeyDeep(args, PLATE_KEYS) || findKeyDeep(body, PLATE_KEYS);
   const phone = query.caller_phone || findKeyDeep(args, PHONE_KEYS) || findKeyDeep(body, PHONE_KEYS);
   return { plate: normalizePlate(plate), phone: normalizePhone(phone) };
+}
+
+function nameFromCalendarTitle(title) {
+  const parts = String(title || "")
+    .split(/\s+[–-]\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (parts.length >= 3 && /[A-Z]{2}\s*\d/i.test(parts.at(-1))) return parts[1];
+  return "";
+}
+
+export function extractCustomerName(body, args = {}) {
+  const first = findKeyDeep(args, FIRST_KEYS) || findKeyDeep(body, FIRST_KEYS);
+  const last = findKeyDeep(args, LAST_KEYS) || findKeyDeep(body, LAST_KEYS);
+  const joined = [first, last].filter(Boolean).join(" ").trim();
+  if (joined) return joined;
+  const full = findKeyDeep(args, NAME_KEYS) || findKeyDeep(body, NAME_KEYS);
+  if (full && !/^(booking_sms|repair_status)$/i.test(String(full))) return String(full).trim();
+  return (
+    nameFromCalendarTitle(findKeyDeep(args, TITLE_KEYS) || findKeyDeep(body, TITLE_KEYS) || body?.tool?.arguments?.event_title) || ""
+  );
 }
 
 const SHOP = "Garage Meier";
@@ -86,7 +110,7 @@ export function bookingSms({ service, when, car, plate }) {
   return `${SHOP}: Booked - ${what} on ${when}. To change it, just call us. See you soon!`;
 }
 
-async function addBookingToBoard(args, phone) {
+async function addBookingToBoard(args, phone, body = {}, smsResult = null) {
   const plateRaw = String(args.license_plate || args.plate || args.licence_plate || "").trim();
   if (!normalizePlate(plateRaw)) return null;
   const jobs = await loadJobs();
@@ -94,7 +118,10 @@ async function addBookingToBoard(args, phone) {
   let job = jobs.find((j) => normalizePlate(j.plate) === plateKey);
   const when = args.date_time || args.when || "";
   const note = [args.service, when].filter(Boolean).join(" — ");
-  const customer = findKeyDeep(args, NAME_KEYS) || "";
+  const customer = extractCustomerName(body, args);
+  const ping = smsResult
+    ? [{ at: new Date().toISOString(), status: smsResult.status, ...smsResult }]
+    : [];
   const inShop = job && job.status && job.status !== "booked" && job.status !== "picked_up";
   if (job) {
     if (args.car) job.car = args.car;
@@ -106,6 +133,7 @@ async function addBookingToBoard(args, phone) {
     } else if (note) {
       job.note = job.note ? `${job.note} | Also booked: ${note}` : `Also booked: ${note}`;
     }
+    if (ping.length) job.notifications = [...(job.notifications || []), ...ping];
     job.updatedAt = new Date().toISOString();
   } else {
     job = {
@@ -118,6 +146,7 @@ async function addBookingToBoard(args, phone) {
       readyAt: "",
       quoteChf: "",
       note,
+      notifications: ping,
       updatedAt: new Date().toISOString(),
     };
     jobs.unshift(job);
@@ -273,7 +302,7 @@ export function createServer() {
           const text = bookingSms({ service: args.service, when, car: args.car, plate: args.license_plate });
           const result = await sendSms(to, text);
           const ok = result.status === "sent" || result.status === "dry-run";
-          const onBoard = await addBookingToBoard(args, to);
+          const onBoard = await addBookingToBoard(args, to, body, result);
           return send(res, 200, {
             sent: ok,
             on_board: Boolean(onBoard),

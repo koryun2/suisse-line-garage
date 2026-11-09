@@ -5,25 +5,31 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Garage Meier: workshop board</title>
 <style>
-  :root { --bg:#0f1115; --card:#181b22; --line:#2a2f3a; --text:#e8eaf0; --muted:#9aa3b2; --accent:#d6457f; }
+  :root { --bg:#0f1115; --card:#181b22; --line:#2a2f3a; --text:#e8eaf0; --muted:#9aa3b2; --accent:#d6457f; --ok:#4ec98a; }
   * { box-sizing: border-box; }
   body { margin:0; font:15px/1.45 system-ui, sans-serif; background:var(--bg); color:var(--text); }
-  header { padding:20px 24px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+  header { padding:20px 28px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; }
   h1 { margin:0; font-size:20px; font-weight:600; }
-  header p { margin:2px 0 0; color:var(--muted); font-size:13px; }
-  main { padding:24px; max-width:1200px; margin:0 auto; }
-  table { width:100%; border-collapse:collapse; background:var(--card); border-radius:10px; overflow:hidden; }
-  th, td { padding:10px 12px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
-  th { color:var(--muted); font-weight:500; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
-  input, select, textarea { width:100%; background:#0f1115; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:6px 8px; font:inherit; }
-  textarea { min-height:38px; resize:vertical; }
-  button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:8px 14px; font:inherit; cursor:pointer; }
+  header p { margin:4px 0 0; color:var(--muted); font-size:13px; max-width:52rem; }
+  main { padding:24px 28px 48px; max-width:1280px; margin:0 auto; }
+  .wrap { overflow-x:auto; border:1px solid var(--line); border-radius:12px; background:var(--card); }
+  table { width:100%; min-width:980px; border-collapse:collapse; }
+  th, td { padding:12px 14px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+  th { color:var(--muted); font-weight:500; font-size:11px; text-transform:uppercase; letter-spacing:.05em; }
+  tr:last-child td { border-bottom:0; }
+  tr.booked td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+  input, select, textarea { width:100%; background:#0f1115; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:8px 10px; font:inherit; }
+  select { min-width:11.5rem; }
+  textarea { min-height:52px; resize:vertical; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:8px 14px; font:inherit; cursor:pointer; white-space:nowrap; }
   button.ghost { background:transparent; border:1px solid var(--line); color:var(--muted); }
-  .plate { font-family:ui-monospace, monospace; font-weight:600; }
+  .plate { font-family:ui-monospace, Consolas, monospace; font-weight:600; letter-spacing:.02em; margin-bottom:6px; }
   .muted { color:var(--muted); font-size:12px; }
-  form.add { display:grid; grid-template-columns:repeat(6, 1fr) auto; gap:8px; margin-bottom:18px; }
-  .saved { color:#4ec98a; font-size:12px; }
-  @media (max-width: 900px) { form.add { grid-template-columns:1fr 1fr; } table, thead, tbody, tr, td, th { display:block; } thead { display:none; } td { border:0; } tr { border-bottom:1px solid var(--line); padding:8px 0; } }
+  .hint { display:block; color:var(--muted); font-size:11px; margin-bottom:4px; }
+  form.add { display:grid; grid-template-columns:repeat(3, 1fr) auto; gap:8px; margin-bottom:16px; }
+  form.add button { height:40px; margin-top:18px; }
+  .saved { color:var(--ok); font-size:12px; }
+  @media (max-width: 800px) { form.add { grid-template-columns:1fr 1fr; } form.add button { margin-top:0; } }
 </style>
 </head>
 <body>
@@ -37,18 +43,20 @@
 </header>
 <main>
   <form class="add" id="add">
-    <input name="plate" placeholder="Plate, e.g. ZH 123456" required aria-label="Plate">
-    <input name="car" placeholder="Car" aria-label="Car">
-    <input name="customer" placeholder="Customer" aria-label="Customer">
-    <input name="phone" placeholder="Phone" aria-label="Phone">
-    <input name="readyAt" type="datetime-local" aria-label="Expected ready">
-    <input name="note" placeholder="Note for the customer" aria-label="Note">
+    <label><span class="hint">Plate</span><input name="plate" placeholder="ZH 123456" required></label>
+    <label><span class="hint">Car</span><input name="car" placeholder="VW Golf"></label>
+    <label><span class="hint">Customer name</span><input name="customer" placeholder="Full name"></label>
+    <label><span class="hint">Phone</span><input name="phone" placeholder="+41 79 …"></label>
+    <label><span class="hint">Expected ready</span><input name="readyAt" type="datetime-local"></label>
+    <label><span class="hint">Note</span><input name="note" placeholder="For the customer"></label>
     <button type="submit">Add car</button>
   </form>
+  <div class="wrap">
   <table>
     <thead><tr><th>Plate / car</th><th>Customer</th><th>Status</th><th>Expected ready</th><th>Quote CHF</th><th>Note for the customer</th><th></th></tr></thead>
     <tbody id="rows"></tbody>
   </table>
+  </div>
 </main>
 <script>
 const rows = document.getElementById("rows");
@@ -64,6 +72,7 @@ const toLocal = (iso) => {
 };
 const fromLocal = (v) => (v ? new Date(v).toISOString() : "");
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const prettyPlate = (s) => String(s || "").replace(/^([A-Z]{2})\s*(\d+)$/i, (_, a, b) => `${a.toUpperCase()} ${b}`);
 
 async function api(method, url, body) {
   const r = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
@@ -88,14 +97,19 @@ async function load() {
     : "SMS: test mode. Texts are saved to data/sms-outbox, not sent.";
   const jobs = data.jobs.sort((a, b) => (a.status === "picked_up") - (b.status === "picked_up") || (b.updatedAt || "").localeCompare(a.updatedAt || ""));
   rows.innerHTML = jobs.map((j) => `
-    <tr data-id="${j.id}">
-      <td><div class="plate">${esc(j.plate)}</div><input data-k="car" value="${esc(j.car)}" aria-label="Car"></td>
-      <td><input data-k="customer" value="${esc(j.customer)}" aria-label="Customer"><input data-k="phone" value="${esc(j.phone)}" aria-label="Phone"></td>
+    <tr data-id="${j.id}" class="${j.status === "booked" ? "booked" : ""}">
+      <td><div class="plate">${esc(prettyPlate(j.plate))}</div><input data-k="car" value="${esc(j.car)}" aria-label="Car"></td>
+      <td>
+        <span class="hint">Name</span>
+        <input data-k="customer" value="${esc(j.customer)}" placeholder="Name" aria-label="Customer">
+        <span class="hint" style="margin-top:8px">Phone</span>
+        <input data-k="phone" value="${esc(j.phone)}" placeholder="Phone" aria-label="Phone">
+      </td>
       <td><select data-k="status" aria-label="Status">${Object.keys(statuses).map((s) => `<option value="${s}" ${s === j.status ? "selected" : ""}>${s.replace(/_/g, " ")}</option>`).join("")}</select>${smsLine(j)}</td>
       <td><input data-k="readyAt" type="datetime-local" value="${toLocal(j.readyAt)}" aria-label="Expected ready"></td>
       <td><input data-k="quoteChf" value="${esc(j.quoteChf)}" aria-label="Quote CHF"></td>
       <td><textarea data-k="note" aria-label="Note">${esc(j.note)}</textarea></td>
-      <td><button class="ghost" data-del>Remove</button><div class="muted">${j.updatedAt ? new Date(j.updatedAt).toLocaleString() : ""}</div></td>
+      <td><button class="ghost" data-del>Remove</button><div class="muted">${j.updatedAt ? new Date(j.updatedAt).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : ""}</div></td>
     </tr>`).join("");
 }
 

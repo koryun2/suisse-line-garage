@@ -65,9 +65,9 @@ Free instances sleep after idle time and have no persistent disk, so demo cars r
 **Tools > Add tool (second tool)**
 - Tool Name: `booking_sms`
 - HTTP Method: `POST`
-- When to Use: `Use right after an appointment has been booked in the calendar, to send the caller an SMS confirmation. Pass the caller's mobile number, the service, the booked date and time in words, the car and the licence plate.`
+- When to Use: `Use right after an appointment has been booked in the calendar, to send the caller an SMS confirmation. Pass the caller's name, mobile number, the service, the booked date and time in words, the car and the licence plate.`
 - Webhook URL: `<tunnel URL>/tools/booking-sms?token=<TOOL_TOKEN>`
-- Parameters (all strings): `customer_phone` (caller's mobile number), `service` (booked job, e.g. Small service), `date_time` (e.g. Wednesday 11 November at 14:30), `car` (make and model), `license_plate`
+- Parameters (all strings): `customer_name` (caller's full name), `customer_phone` (caller's mobile number), `service` (booked job, e.g. Small service), `date_time` (e.g. Wednesday 11 November at 14:30), `car` (make and model), `license_plate`
 - Execution behaviour: turn on "Don't wait for result".
 
 **Opening Hours**: Mon to Fri 07:30 to 12:00 and 13:15 to 18:00; Sat 08:00 to 12:00; Sun closed.
