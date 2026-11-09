@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: suisse-line-garage
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: master
+    autoDeployTrigger: commit
+    buildCommand: npm test
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: LOG_PAYLOADS
+        value: "0"
+      - key: TOOL_TOKEN
+        sync: false
+      - key: BOARD_PASSWORD
+        sync: false

@@ -38,7 +38,14 @@ npm test                                # 15 tests
 
 `.env` holds `TOOL_TOKEN` and `BOARD_PASSWORD` (not committed). To send real SMS, add `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and `TWILIO_FROM` (your Twilio number) to `.env` and restart. A Twilio trial account only texts numbers you have verified in Twilio, which is enough for a demo to your own phone. Every webhook call from Suisse Line is saved to `server/data/webhook-log/` so you can see the exact payload.
 
-The tunnel URL changes on every start, so the tool's Webhook URL must be updated each time. For a stable demo, deploy `server/` to Render or Fly.io with a persistent disk.
+The tunnel URL changes on every start, so the tool's Webhook URL must be updated each time.
+
+**Deploy (GitHub + Render).** Repo: https://github.com/koryun2/suisse-line-garage (private). `render.yaml` defines a free Node web service in Frankfurt. After the first deploy, set `TOOL_TOKEN` and `BOARD_PASSWORD` in the Render dashboard to the same values as local `.env`, then point Suisse Line tools at:
+
+- `https://<service>.onrender.com/tools/repair-status?token=<TOOL_TOKEN>`
+- `https://<service>.onrender.com/tools/booking-sms?token=<TOOL_TOKEN>`
+
+Free instances sleep after idle time and have no persistent disk, so demo cars reload from `seed-jobs.json` on a cold start. Twilio keys stay optional.
 
 ## Suisse Line settings
 
